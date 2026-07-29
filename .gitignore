@@ -1,0 +1,6 @@
+node_modules/
+.codeartsdoer/
+.merkle-snapshot.json
+*.zip
+*.crx
+*.pem
