@@ -20,6 +20,17 @@ let currentEngine = 'baidu';
 let shortcuts = [];
 let wallpaperState = { type: 'default', url: '', bingIndex: -1 };
 
+const DEFAULT_SETTINGS = {
+  clock24h: true,
+  clockShowSeconds: true,
+  clockShowDate: true,
+  clockShowGreeting: true,
+  searchFocusBlur: true,
+  wallpaperDim: 55,
+  showShortcuts: true,
+};
+let appSettings = { ...DEFAULT_SETTINGS };
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings(() => {
     renderShortcuts();
@@ -30,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAddShortcut();
   initWallpaper();
   initDragLink();
+  initSettingsPanel();
 });
 
 function initClock() {
@@ -39,23 +51,43 @@ function initClock() {
 
 function updateClock() {
   const now = new Date();
-  const h = String(now.getHours()).padStart(2, '0');
+  let h = now.getHours();
   const m = String(now.getMinutes()).padStart(2, '0');
   const s = String(now.getSeconds()).padStart(2, '0');
-  document.getElementById('clock').textContent = `${h}:${m}:${s}`;
 
-  const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${weekDays[now.getDay()]}`;
-  document.getElementById('date').textContent = dateStr;
+  const clockEl = document.getElementById('clock');
+  const dateEl = document.getElementById('date');
+  const greetingEl = document.getElementById('greeting');
 
-  const hour = now.getHours();
-  let greeting = '晚上好';
-  if (hour < 6) greeting = '凌晨好';
-  else if (hour < 9) greeting = '早上好';
-  else if (hour < 12) greeting = '上午好';
-  else if (hour < 14) greeting = '中午好';
-  else if (hour < 18) greeting = '下午好';
-  document.getElementById('greeting').textContent = greeting;
+  if (appSettings.clock24h) {
+    clockEl.textContent = appSettings.clockShowSeconds ? `${String(h).padStart(2, '0')}:${m}:${s}` : `${String(h).padStart(2, '0')}:${m}`;
+  } else {
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    clockEl.textContent = appSettings.clockShowSeconds ? `${h}:${m}:${s} ${ampm}` : `${h}:${m} ${ampm}`;
+  }
+
+  if (appSettings.clockShowDate) {
+    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+    dateEl.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${weekDays[now.getDay()]}`;
+    dateEl.style.display = '';
+  } else {
+    dateEl.style.display = 'none';
+  }
+
+  if (appSettings.clockShowGreeting) {
+    const hour = now.getHours();
+    let greeting = '晚上好';
+    if (hour < 6) greeting = '凌晨好';
+    else if (hour < 9) greeting = '早上好';
+    else if (hour < 12) greeting = '上午好';
+    else if (hour < 14) greeting = '中午好';
+    else if (hour < 18) greeting = '下午好';
+    greetingEl.textContent = greeting;
+    greetingEl.style.display = '';
+  } else {
+    greetingEl.style.display = 'none';
+  }
 }
 
 function initSearch() {
@@ -70,6 +102,7 @@ function initSearch() {
       currentEngine = data.searchEngine;
     }
     updateEngineUI();
+    document.getElementById('settingSearchEngine').value = currentEngine;
   });
 
   trigger.addEventListener('click', (e) => {
@@ -305,8 +338,10 @@ function activateSearchFocus() {
   const overlay = document.getElementById('searchFocusOverlay');
 
   container.classList.add('search-active');
-  overlay.classList.add('active');
-  document.body.classList.add('search-active');
+  if (appSettings.searchFocusBlur) {
+    overlay.classList.add('active');
+    document.body.classList.add('search-active');
+  }
   if (input.value.trim()) {
     input.classList.add('has-content');
   }
@@ -342,8 +377,15 @@ function updateEngineUI() {
 }
 
 function loadSettings(cb) {
-  chrome.storage.local.get('shortcuts', (data) => {
+  chrome.storage.local.get(['shortcuts', 'appSettings', 'searchEngine'], (data) => {
     shortcuts = data.shortcuts || [...DEFAULT_SHORTCUTS];
+    if (data.appSettings) {
+      appSettings = { ...DEFAULT_SETTINGS, ...data.appSettings };
+    }
+    if (data.searchEngine && ENGINES[data.searchEngine]) {
+      currentEngine = data.searchEngine;
+    }
+    applyShortcutsVisibility();
     if (cb) cb();
   });
 }
@@ -623,12 +665,14 @@ function initWallpaper() {
   initWallpaperTabs();
   initCustomUpload();
   initUrlWallpaper();
+  initAutoBingDaily();
 
   chrome.storage.local.get('wallpaper', (data) => {
     if (data.wallpaper) {
       wallpaperState = data.wallpaper;
     }
     applyWallpaper();
+    checkBingDailyOnLoad();
   });
 }
 
@@ -647,6 +691,8 @@ function initWallpaperTabs() {
 function applyWallpaper() {
   const layer = document.querySelector('.wallpaper-layer');
   if (!layer) return;
+
+  layer.style.setProperty('--wallpaper-dim', appSettings.wallpaperDim / 100);
 
   if (wallpaperState.type === 'default' || !wallpaperState.url) {
     layer.classList.remove('visible');
@@ -753,6 +799,40 @@ function renderBingGrid() {
 
 function clearBingSelection() {
   document.querySelectorAll('.bing-item').forEach(i => i.classList.remove('selected'));
+}
+
+// ========== 每日自动切换必应壁纸 ==========
+function initAutoBingDaily() {
+  const toggle = document.getElementById('autoBingDailyToggle');
+  if (!toggle) return;
+
+  chrome.storage.local.get('autoBingDaily', (data) => {
+    toggle.checked = !!data.autoBingDaily;
+  });
+
+  toggle.addEventListener('change', () => {
+    const enabled = toggle.checked;
+    chrome.storage.local.set({ autoBingDaily: enabled });
+    if (enabled) {
+      checkBingDailyOnLoad();
+    }
+  });
+}
+
+function checkBingDailyOnLoad() {
+  chrome.storage.local.get('autoBingDaily', (data) => {
+    if (!data.autoBingDaily) return;
+    try {
+      chrome.runtime.sendMessage({ type: 'checkBingDaily' }, (response) => {
+        if (chrome.runtime.lastError) return;
+        if (response && response.needUpdate && response.wallpaper) {
+          wallpaperState = { type: 'bing', url: response.wallpaper.url, bingIndex: 0 };
+          saveWallpaperState();
+          applyWallpaper();
+        }
+      });
+    } catch (e) {}
+  });
 }
 
 // ========== 自定义壁纸上传 ==========
@@ -975,4 +1055,104 @@ function openEditModal(index) {
   document.getElementById('modalOverlay').classList.add('show');
 
   setTimeout(() => document.getElementById('shortcutName').focus(), 100);
+}
+
+// ========== 设置面板 ==========
+function initSettingsPanel() {
+  const panel = document.getElementById('settingsPanel');
+  const btn = document.getElementById('generalSettingsBtn');
+  const closeBtn = document.getElementById('settingsPanelClose');
+
+  btn.addEventListener('click', () => {
+    panel.classList.add('open');
+  });
+
+  closeBtn.addEventListener('click', () => {
+    panel.classList.remove('open');
+  });
+
+  chrome.storage.local.get('appSettings', (data) => {
+    if (data.appSettings) {
+      appSettings = { ...DEFAULT_SETTINGS, ...data.appSettings };
+    }
+    applyAllSettings();
+    bindSettingsEvents();
+  });
+}
+
+function applyAllSettings() {
+  document.getElementById('settingClock24h').checked = appSettings.clock24h;
+  document.getElementById('settingClockSeconds').checked = appSettings.clockShowSeconds;
+  document.getElementById('settingClockDate').checked = appSettings.clockShowDate;
+  document.getElementById('settingClockGreeting').checked = appSettings.clockShowGreeting;
+  document.getElementById('settingSearchBlur').checked = appSettings.searchFocusBlur;
+  document.getElementById('settingWallpaperDim').value = appSettings.wallpaperDim;
+  document.getElementById('settingWallpaperDimValue').textContent = appSettings.wallpaperDim + '%';
+  document.getElementById('settingShowShortcuts').checked = appSettings.showShortcuts;
+  document.getElementById('settingSearchEngine').value = currentEngine;
+
+  updateClock();
+  applyWallpaper();
+  applyShortcutsVisibility();
+}
+
+function applyShortcutsVisibility() {
+  const section = document.querySelector('.shortcuts-section');
+  if (section) {
+    section.style.display = appSettings.showShortcuts ? '' : 'none';
+  }
+}
+
+function bindSettingsEvents() {
+  const save = () => {
+    chrome.storage.local.set({ appSettings });
+  };
+
+  document.getElementById('settingClock24h').addEventListener('change', (e) => {
+    appSettings.clock24h = e.target.checked;
+    save();
+    updateClock();
+  });
+
+  document.getElementById('settingClockSeconds').addEventListener('change', (e) => {
+    appSettings.clockShowSeconds = e.target.checked;
+    save();
+    updateClock();
+  });
+
+  document.getElementById('settingClockDate').addEventListener('change', (e) => {
+    appSettings.clockShowDate = e.target.checked;
+    save();
+    updateClock();
+  });
+
+  document.getElementById('settingClockGreeting').addEventListener('change', (e) => {
+    appSettings.clockShowGreeting = e.target.checked;
+    save();
+    updateClock();
+  });
+
+  document.getElementById('settingSearchEngine').addEventListener('change', (e) => {
+    currentEngine = e.target.value;
+    chrome.storage.local.set({ searchEngine: currentEngine });
+    updateEngineUI();
+  });
+
+  document.getElementById('settingSearchBlur').addEventListener('change', (e) => {
+    appSettings.searchFocusBlur = e.target.checked;
+    save();
+  });
+
+  document.getElementById('settingWallpaperDim').addEventListener('input', (e) => {
+    appSettings.wallpaperDim = parseInt(e.target.value);
+    document.getElementById('settingWallpaperDimValue').textContent = appSettings.wallpaperDim + '%';
+    save();
+    applyWallpaper();
+  });
+
+  document.getElementById('settingShowShortcuts').addEventListener('change', (e) => {
+    appSettings.showShortcuts = e.target.checked;
+    save();
+    applyShortcutsVisibility();
+  });
 }

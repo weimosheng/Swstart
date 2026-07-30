@@ -3,7 +3,7 @@
   "name": "笙维起始页",
   "version": "1.0.0",
   "description": "Shengwei Start - 一个简洁美观的Edge浏览器新标签页起始页扩展",
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "background": {
     "service_worker": "background.js"
   },

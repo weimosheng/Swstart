@@ -103,6 +103,13 @@
           <button class="wallpaper-tab" data-tab="url">远程链接</button>
         </div>
         <div class="wallpaper-tab-content active" id="tabBing">
+          <div class="auto-bing-daily">
+            <label class="auto-bing-daily-label" for="autoBingDailyToggle">每日自动切换</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="autoBingDailyToggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
           <div class="bing-loading" id="bingLoading">加载中...</div>
           <div class="bing-grid" id="bingGrid"></div>
         </div>
@@ -138,6 +145,94 @@
         <path d="M21 15l-5-5L5 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
+
+    <!-- 设置按钮 -->
+    <button class="general-settings-btn" id="generalSettingsBtn" title="设置">
+      <svg viewBox="0 0 24 24" width="20" height="20">
+        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+    </button>
+
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-panel-header">
+        <h3 class="settings-panel-title">设置</h3>
+        <button class="settings-panel-close" id="settingsPanelClose">&times;</button>
+      </div>
+      <div class="settings-panel-body">
+        <!-- 时钟设置 -->
+        <div class="settings-group">
+          <div class="settings-group-title">时钟</div>
+          <div class="settings-item">
+            <span class="settings-label">24 小时制</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingClock24h" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">显示秒数</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingClockSeconds" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">显示日期</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingClockDate" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">显示问候语</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingClockGreeting" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <!-- 搜索设置 -->
+        <div class="settings-group">
+          <div class="settings-group-title">搜索</div>
+          <div class="settings-item">
+            <span class="settings-label">默认搜索引擎</span>
+            <select class="settings-select" id="settingSearchEngine">
+              <option value="baidu">百度</option>
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">聚焦模糊效果</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingSearchBlur" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <!-- 外观设置 -->
+        <div class="settings-group">
+          <div class="settings-group-title">外观</div>
+          <div class="settings-item">
+            <span class="settings-label">壁纸遮罩透明度</span>
+            <div class="settings-slider-row">
+              <input type="range" class="settings-range" id="settingWallpaperDim" min="0" max="100" value="55">
+              <span class="settings-range-value" id="settingWallpaperDimValue">55%</span>
+            </div>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">显示快捷导航</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingShowShortcuts" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 拖拽提示 -->
     <div class="drag-hint" id="dragHint">
