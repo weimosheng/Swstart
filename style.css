@@ -470,6 +470,146 @@ body.has-wallpaper::before {
   box-shadow: 0 8px 24px var(--shadow);
 }
 
+.shortcut-item.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.shortcut-item.drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
+}
+
+.shortcut-item.drag-over-inner {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.4);
+  background: rgba(88, 166, 255, 0.08);
+  transform: scale(1.05);
+}
+
+.shortcut-item.drag-left {
+  border-color: rgba(88, 166, 255, 0.4);
+}
+
+.shortcut-item.drag-right {
+  border-color: rgba(88, 166, 255, 0.4);
+}
+
+.drop-indicator {
+  position: fixed;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(88, 166, 255, 0.6);
+  animation: dropPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes dropPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.shortcut-item.folder-item {
+  cursor: pointer;
+}
+
+.folder-count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-popup {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  z-index: 300;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  transform: scale(0.95) translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.folder-popup.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+.folder-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.folder-popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.folder-popup-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.folder-popup-close:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.folder-popup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.folder-popup-grid .shortcut-item {
+  padding: 10px 6px;
+}
+
+.folder-popup-grid .shortcut-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.folder-popup-grid .shortcut-name {
+  font-size: 11px;
+  max-width: 70px;
+}
+
 .shortcut-icon {
   width: 40px;
   height: 40px;
@@ -492,6 +632,8 @@ body.has-wallpaper::before {
   border-radius: 10px;
   background: var(--bg-card);
   padding: 4px;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 .shortcut-icon .icon-letter {
@@ -1194,20 +1336,20 @@ body.has-wallpaper::before {
 .settings-panel {
   position: fixed;
   top: 0;
-  left: -420px;
+  right: -420px;
   width: 400px;
   height: 100vh;
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   z-index: 200;
   display: flex;
   flex-direction: column;
-  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.3);
+  transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
 }
 
 .settings-panel.open {
-  left: 0;
+  right: 0;
 }
 
 .settings-panel-header {
@@ -1392,6 +1534,6 @@ body.has-wallpaper::before {
 
   .settings-panel {
     width: 100%;
-    left: -100%;
+    right: -100%;
   }
 }

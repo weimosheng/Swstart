@@ -1,7 +1,7 @@
 const BING_API = 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN';
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('bingDailyWallpaper', { periodInMinutes: 1440 });
+  chrome.alarms.create('bingDailyWallpaper', { delayInMinutes: 1, periodInMinutes: 1440 });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -50,45 +50,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => {
         sendResponse({ success: false, error: err.message });
       });
-    return true;
-  }
-
-  if (message.type === 'checkBingDaily') {
-    chrome.storage.local.get(['autoBingDaily', 'bingDailyDate'], (data) => {
-      if (!data.autoBingDaily) {
-        sendResponse({ needUpdate: false });
-        return;
-      }
-      const today = new Date().toISOString().slice(0, 10);
-      if (data.bingDailyDate === today) {
-        sendResponse({ needUpdate: false });
-        return;
-      }
-      fetch(BING_API)
-        .then(res => res.json())
-        .then(result => {
-          const images = result.images || [];
-          if (images.length === 0) {
-            sendResponse({ needUpdate: false });
-            return;
-          }
-          const img = images[0];
-          const wp = {
-            url: 'https://www.bing.com' + img.url,
-            title: img.title || '',
-            copyright: img.copyright || '',
-          };
-          chrome.storage.local.set({
-            bingDailyWallpaper: wp,
-            bingDailyDate: today,
-            wallpaper: { type: 'bing', url: wp.url, bingIndex: 0 },
-          });
-          sendResponse({ needUpdate: true, wallpaper: wp });
-        })
-        .catch(() => {
-          sendResponse({ needUpdate: false });
-        });
-    });
     return true;
   }
 

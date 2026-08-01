@@ -338,10 +338,12 @@ function activateSearchFocus() {
   const overlay = document.getElementById('searchFocusOverlay');
 
   container.classList.add('search-active');
+  document.body.classList.add('search-active');
   if (appSettings.searchFocusBlur) {
     overlay.classList.add('active');
-    document.body.classList.add('search-active');
   }
+  document.getElementById('wallpaperPanel').classList.remove('open');
+  document.getElementById('settingsPanel').classList.remove('open');
   if (input.value.trim()) {
     input.classList.add('has-content');
   }
@@ -399,32 +401,54 @@ function renderShortcuts() {
   grid.innerHTML = '';
 
   shortcuts.forEach((item, index) => {
-    const el = document.createElement('a');
+    const el = document.createElement('div');
     el.className = 'shortcut-item';
-    el.href = item.url;
-    el.target = '_self';
+    el.dataset.index = index;
+    el.draggable = true;
 
-    const initial = item.name.charAt(0).toUpperCase();
-
-    let iconHtml = '';
-    let iconStyle = '';
-    if (item.iconUrl) {
-      iconHtml = `<img src="${item.iconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter" style="display:none">${initial}</span>`;
-      iconStyle = 'background: transparent';
+    if (item.isFolder) {
+      el.classList.add('folder-item');
+      const count = (item.children || []).length;
+      el.innerHTML = `
+        <div class="shortcut-icon" style="background: ${item.color || 'var(--accent)'}">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        </div>
+        <span class="shortcut-name">${item.name}</span>
+        <span class="folder-count">${count}</span>
+      `;
+      el.addEventListener('click', () => toggleFolder(index));
     } else {
-      iconHtml = initial;
-      iconStyle = `background: ${item.color}`;
+      const initial = item.name.charAt(0).toUpperCase();
+      let iconHtml = '';
+      let iconStyle = '';
+      if (item.iconUrl) {
+        iconHtml = `<img src="${item.iconUrl}" alt="" draggable="false" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter" style="display:none">${initial}</span>`;
+        iconStyle = 'background: transparent';
+      } else {
+        iconHtml = initial;
+        iconStyle = `background: ${item.color}`;
+      }
+      el.innerHTML = `
+        <div class="shortcut-icon" style="${iconStyle}">${iconHtml}</div>
+        <span class="shortcut-name">${item.name}</span>
+      `;
+      el.addEventListener('click', () => {
+        if (!el.classList.contains('dragging')) {
+          window.location.href = item.url;
+        }
+      });
     }
-
-    el.innerHTML = `
-      <div class="shortcut-icon" style="${iconStyle}">${iconHtml}</div>
-      <span class="shortcut-name">${item.name}</span>
-    `;
 
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       showShortcutMenu(e, index);
     });
+
+    el.addEventListener('dragstart', (e) => onDragStart(e, index));
+    el.addEventListener('dragend', onDragEnd);
+    el.addEventListener('dragover', (e) => onDragOver(e, index));
+    el.addEventListener('dragleave', onDragLeave);
+    el.addEventListener('drop', (e) => onDrop(e, index));
 
     const nameEl = el.querySelector('.shortcut-name');
     let tooltipTimer = null;
@@ -812,26 +836,46 @@ function initAutoBingDaily() {
 
   toggle.addEventListener('change', () => {
     const enabled = toggle.checked;
-    chrome.storage.local.set({ autoBingDaily: enabled });
-    if (enabled) {
-      checkBingDailyOnLoad();
-    }
+    chrome.storage.local.set({ autoBingDaily: enabled }, () => {
+      if (enabled) {
+        applyBingDailyNow();
+      }
+    });
   });
 }
 
-function checkBingDailyOnLoad() {
-  chrome.storage.local.get('autoBingDaily', (data) => {
-    if (!data.autoBingDaily) return;
-    try {
-      chrome.runtime.sendMessage({ type: 'checkBingDaily' }, (response) => {
-        if (chrome.runtime.lastError) return;
-        if (response && response.needUpdate && response.wallpaper) {
-          wallpaperState = { type: 'bing', url: response.wallpaper.url, bingIndex: 0 };
-          saveWallpaperState();
-          applyWallpaper();
-        }
+function applyBingDailyNow() {
+  fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN')
+    .then(res => res.json())
+    .then(data => {
+      const images = data.images || [];
+      if (images.length === 0) return;
+      const img = images[0];
+      const wp = {
+        url: 'https://www.bing.com' + img.url,
+        title: img.title || '',
+        copyright: img.copyright || '',
+      };
+      const today = new Date().toISOString().slice(0, 10);
+      chrome.storage.local.set({
+        bingDailyWallpaper: wp,
+        bingDailyDate: today,
       });
-    } catch (e) {}
+      wallpaperState = { type: 'bing', url: wp.url, bingIndex: 0 };
+      saveWallpaperState();
+      applyWallpaper();
+      bingWallpapers = [];
+      loadBingWallpapers();
+    })
+    .catch(() => {});
+}
+
+function checkBingDailyOnLoad() {
+  chrome.storage.local.get(['autoBingDaily', 'bingDailyDate'], (data) => {
+    if (!data.autoBingDaily) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (data.bingDailyDate === today) return;
+    applyBingDailyNow();
   });
 }
 
@@ -933,6 +977,7 @@ function initDragLink() {
   let dragCounter = 0;
 
   document.addEventListener('dragenter', (e) => {
+    if (isInternalDrag()) return;
     e.preventDefault();
     const url = getDragUrl(e);
     if (!url) return;
@@ -941,6 +986,7 @@ function initDragLink() {
   });
 
   document.addEventListener('dragleave', (e) => {
+    if (isInternalDrag()) return;
     e.preventDefault();
     dragCounter--;
     if (dragCounter <= 0) {
@@ -950,10 +996,12 @@ function initDragLink() {
   });
 
   document.addEventListener('dragover', (e) => {
+    if (isInternalDrag()) return;
     e.preventDefault();
   });
 
   document.addEventListener('drop', (e) => {
+    if (isInternalDrag()) return;
     e.preventDefault();
     dragCounter = 0;
     hint.classList.remove('show');
@@ -963,6 +1011,10 @@ function initDragLink() {
 
     openModalWithUrl(url);
   });
+}
+
+function isInternalDrag() {
+  return dragSourceIndex !== null;
 }
 
 function getDragUrl(e) {
@@ -988,6 +1040,255 @@ function openModalWithUrl(url) {
   });
 }
 
+// ========== 拖拽排序 & 文件夹 ==========
+let dragSourceIndex = null;
+
+function onDragStart(e, index) {
+  e.stopPropagation();
+  dragSourceIndex = index;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('application/x-shortcut-reorder', String(index));
+  e.dataTransfer.setData('text/plain', '');
+  requestAnimationFrame(() => {
+    e.target.classList.add('dragging');
+  });
+}
+
+function onDragEnd(e) {
+  dragSourceIndex = null;
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.shortcut-item').forEach(el => {
+    el.classList.remove('drag-over', 'drag-over-inner', 'drag-left', 'drag-right');
+  });
+  document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over', 'drag-over-inner', 'drag-left', 'drag-right');
+  document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+}
+
+function onDragOver(e, index) {
+  e.preventDefault();
+  if (dragSourceIndex === null || dragSourceIndex === index) return;
+  e.dataTransfer.dropEffect = 'move';
+
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const isInner = x > rect.width * 0.25 && x < rect.width * 0.75 && y > rect.height * 0.25 && y < rect.height * 0.75;
+
+  document.querySelectorAll('.shortcut-item').forEach(item => {
+    item.classList.remove('drag-over', 'drag-over-inner', 'drag-left', 'drag-right');
+  });
+  document.querySelectorAll('.drop-indicator').forEach(ind => ind.remove());
+
+  if (isInner && (shortcuts[index].isFolder || !shortcuts[dragSourceIndex].isFolder)) {
+    el.classList.add('drag-over-inner');
+  } else {
+    const isLeft = x < rect.width / 2;
+    if (isLeft) {
+      el.classList.add('drag-left');
+    } else {
+      el.classList.add('drag-right');
+    }
+    showDropIndicator(el, isLeft);
+  }
+}
+
+function showDropIndicator(targetEl, isLeft) {
+  const grid = document.getElementById('shortcutsGrid');
+  const gridRect = grid.getBoundingClientRect();
+  const targetRect = targetEl.getBoundingClientRect();
+
+  const indicator = document.createElement('div');
+  indicator.className = 'drop-indicator';
+
+  const row = Math.round((targetRect.top - gridRect.top) / (targetRect.height + 12));
+  const indicatorTop = gridRect.top + row * (targetRect.height + 12) + targetRect.height / 2 - 1;
+
+  if (isLeft) {
+    indicator.style.left = (targetRect.left - 6) + 'px';
+  } else {
+    indicator.style.left = (targetRect.right + 6) + 'px';
+  }
+  indicator.style.top = (targetRect.top + targetRect.height * 0.15) + 'px';
+  indicator.style.height = (targetRect.height * 0.7) + 'px';
+
+  document.body.appendChild(indicator);
+}
+
+function onDrop(e, targetIndex) {
+  e.preventDefault();
+  if (dragSourceIndex === null || dragSourceIndex === targetIndex) return;
+
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const isInner = x > rect.width * 0.25 && x < rect.width * 0.75 && y > rect.height * 0.25 && y < rect.height * 0.75;
+
+  const sourceItem = shortcuts[dragSourceIndex];
+  const targetItem = shortcuts[targetIndex];
+
+  if (isInner && targetItem.isFolder) {
+    if (sourceItem.isFolder) return;
+    shortcuts.splice(dragSourceIndex, 1);
+    const newTargetIndex = dragSourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    if (!shortcuts[newTargetIndex].children) shortcuts[newTargetIndex].children = [];
+    shortcuts[newTargetIndex].children.push(sourceItem);
+    saveShortcuts(() => renderShortcuts());
+  } else if (isInner && !targetItem.isFolder && !sourceItem.isFolder) {
+    const folder = {
+      name: '文件夹',
+      color: `hsl(${Math.floor(Math.random() * 360)}, 65%, 55%)`,
+      isFolder: true,
+      children: [targetItem, sourceItem],
+    };
+    const minIdx = Math.min(dragSourceIndex, targetIndex);
+    const maxIdx = Math.max(dragSourceIndex, targetIndex);
+    shortcuts.splice(maxIdx, 1);
+    shortcuts.splice(minIdx, 1, folder);
+    saveShortcuts(() => renderShortcuts());
+  } else {
+    const isLeft = x < rect.width / 2;
+    const [moved] = shortcuts.splice(dragSourceIndex, 1);
+    let insertIdx = dragSourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    if (!isLeft) insertIdx += 1;
+    shortcuts.splice(insertIdx, 0, moved);
+    saveShortcuts(() => renderShortcuts());
+  }
+
+  dragSourceIndex = null;
+}
+
+function toggleFolder(folderIndex) {
+  const existing = document.querySelector('.folder-popup');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+
+  const folder = shortcuts[folderIndex];
+  if (!folder || !folder.isFolder || !folder.children || folder.children.length === 0) return;
+
+  const triggerEl = document.querySelector(`.shortcut-item[data-index="${folderIndex}"]`);
+  if (!triggerEl) return;
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.className = 'folder-popup';
+  popup.id = 'folderPopup';
+
+  const header = document.createElement('div');
+  header.className = 'folder-popup-header';
+  header.innerHTML = `<span class="folder-popup-title">${folder.name}</span><button class="folder-popup-close" id="folderPopupClose">&times;</button>`;
+  popup.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'folder-popup-grid';
+
+  folder.children.forEach((child, childIdx) => {
+    const el = document.createElement('div');
+    el.className = 'shortcut-item';
+
+    const initial = child.name.charAt(0).toUpperCase();
+    let iconHtml = '';
+    let iconStyle = '';
+    if (child.iconUrl) {
+      iconHtml = `<img src="${child.iconUrl}" alt="" draggable="false" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter" style="display:none">${initial}</span>`;
+      iconStyle = 'background: transparent';
+    } else {
+      iconHtml = initial;
+      iconStyle = `background: ${child.color}`;
+    }
+
+    el.innerHTML = `
+      <div class="shortcut-icon" style="${iconStyle}">${iconHtml}</div>
+      <span class="shortcut-name">${child.name}</span>
+    `;
+
+    el.addEventListener('click', () => {
+      window.location.href = child.url;
+    });
+
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showFolderItemMenu(e, folderIndex, childIdx);
+    });
+
+    grid.appendChild(el);
+  });
+
+  popup.appendChild(grid);
+  document.body.appendChild(popup);
+
+  const popupRect = popup.getBoundingClientRect();
+  let left = rect.left + rect.width / 2 - popupRect.width / 2;
+  let top = rect.top - popupRect.height - 12;
+  if (top < 10) top = rect.bottom + 12;
+  if (left < 10) left = 10;
+  if (left + popupRect.width > window.innerWidth - 10) left = window.innerWidth - popupRect.width - 10;
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+
+  requestAnimationFrame(() => popup.classList.add('show'));
+
+  document.getElementById('folderPopupClose').addEventListener('click', () => popup.remove());
+
+  const closeOnOutside = (ev) => {
+    if (!popup.contains(ev.target) && !triggerEl.contains(ev.target)) {
+      popup.remove();
+      document.removeEventListener('click', closeOnOutside, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeOnOutside, true), 0);
+}
+
+function showFolderItemMenu(e, folderIndex, childIndex) {
+  e.stopPropagation();
+  hideShortcutMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'shortcut-context-menu';
+  menu.innerHTML = `
+    <div class="shortcut-menu-item" data-action="remove">移出文件夹</div>
+    <div class="shortcut-menu-item" data-action="delete">删除</div>
+  `;
+
+  document.body.appendChild(menu);
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 120) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - 80) + 'px';
+  shortcutMenuEl = menu;
+
+  menu.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const action = ev.target.closest('.shortcut-menu-item')?.dataset.action;
+    const folder = shortcuts[folderIndex];
+    if (action === 'remove') {
+      const [removed] = folder.children.splice(childIndex, 1);
+      shortcuts.push(removed);
+      if (folder.children.length === 0) {
+        shortcuts.splice(folderIndex, 1);
+      }
+      saveShortcuts(() => renderShortcuts());
+      const popup = document.getElementById('folderPopup');
+      if (popup) popup.remove();
+    } else if (action === 'delete') {
+      folder.children.splice(childIndex, 1);
+      if (folder.children.length === 0) {
+        shortcuts.splice(folderIndex, 1);
+      }
+      saveShortcuts(() => renderShortcuts());
+      const popup = document.getElementById('folderPopup');
+      if (popup) popup.remove();
+    }
+    hideShortcutMenu();
+  });
+}
+
 // ========== 快捷导航右键菜单 ==========
 let shortcutMenuEl = null;
 
@@ -996,12 +1297,21 @@ function showShortcutMenu(e, index) {
   e.stopPropagation();
   hideShortcutMenu();
 
+  const item = shortcuts[index];
   const menu = document.createElement('div');
   menu.className = 'shortcut-context-menu';
-  menu.innerHTML = `
-    <div class="shortcut-menu-item" data-action="edit">编辑</div>
-    <div class="shortcut-menu-item" data-action="delete">删除</div>
-  `;
+
+  if (item.isFolder) {
+    menu.innerHTML = `
+      <div class="shortcut-menu-item" data-action="rename">重命名</div>
+      <div class="shortcut-menu-item" data-action="delete">删除文件夹</div>
+    `;
+  } else {
+    menu.innerHTML = `
+      <div class="shortcut-menu-item" data-action="edit">编辑</div>
+      <div class="shortcut-menu-item" data-action="delete">删除</div>
+    `;
+  }
 
   document.body.appendChild(menu);
 
@@ -1018,8 +1328,18 @@ function showShortcutMenu(e, index) {
     if (action === 'edit') {
       openEditModal(index);
     } else if (action === 'delete') {
-      shortcuts.splice(index, 1);
+      if (item.isFolder && item.children && item.children.length > 0) {
+        shortcuts.splice(index, 1, ...item.children);
+      } else {
+        shortcuts.splice(index, 1);
+      }
       saveShortcuts(() => renderShortcuts());
+    } else if (action === 'rename') {
+      const newName = prompt('文件夹名称', item.name);
+      if (newName && newName.trim()) {
+        shortcuts[index].name = newName.trim();
+        saveShortcuts(() => renderShortcuts());
+      }
     }
     hideShortcutMenu();
   });

@@ -24,7 +24,7 @@
 
 1. 克隆仓库
    ```bash
-   git clone https://github.com/your-username/EdgeHomepageExtension.git
+   git clone https://github.com/weimosheng/Swstart.git
    ```
 2. 打开 Edge，访问 `edge://extensions/`
 3. 开启「开发人员模式」
