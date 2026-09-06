@@ -1,3 +1,36 @@
+// ========== 存储工具 ==========
+const store = chrome.storage.local;
+
+// ========== 图标缓存 ==========
+const _iconCache = new Map();
+
+function getCachedIcon(url) {
+  return new Promise((resolve) => {
+    if (_iconCache.has(url)) return resolve(_iconCache.get(url));
+    store.get('iconCache', (data) => {
+      const cache = data.iconCache || {};
+      if (cache[url]) {
+        _iconCache.set(url, cache[url]);
+        return resolve(cache[url]);
+      }
+      fetch(url)
+        .then(r => r.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            _iconCache.set(url, dataUrl);
+            cache[url] = dataUrl;
+            store.set({ iconCache: cache });
+            resolve(dataUrl);
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => resolve(null));
+    });
+  });
+}
+
 const DEFAULT_SHORTCUTS = [
   { name: '百度',       url: 'https://www.baidu.com',        color: '#2932e1' },
   { name: 'GitHub',     url: 'https://github.com',           color: '#333' },
@@ -422,8 +455,16 @@ function renderShortcuts() {
       let iconHtml = '';
       let iconStyle = '';
       if (item.iconUrl) {
-        iconHtml = `<img src="${item.iconUrl}" alt="" draggable="false" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter" style="display:none">${initial}</span>`;
+        iconHtml = `<img alt="" draggable="false" style="display:none" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter">${initial}</span>`;
         iconStyle = 'background: transparent';
+        getCachedIcon(item.iconUrl).then(dataUrl => {
+          if (dataUrl) {
+            const img = el.querySelector('img');
+            if (img) { img.src = dataUrl; img.style.display = ''; }
+            const letter = el.querySelector('.icon-letter');
+            if (letter) letter.style.display = 'none';
+          }
+        });
       } else {
         iconHtml = initial;
         iconStyle = `background: ${item.color}`;
@@ -1197,8 +1238,16 @@ function toggleFolder(folderIndex) {
     let iconHtml = '';
     let iconStyle = '';
     if (child.iconUrl) {
-      iconHtml = `<img src="${child.iconUrl}" alt="" draggable="false" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter" style="display:none">${initial}</span>`;
+      iconHtml = `<img alt="" draggable="false" style="display:none" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-letter">${initial}</span>`;
       iconStyle = 'background: transparent';
+      getCachedIcon(child.iconUrl).then(dataUrl => {
+        if (dataUrl) {
+          const img = el.querySelector('img');
+          if (img) { img.src = dataUrl; img.style.display = ''; }
+          const letter = el.querySelector('.icon-letter');
+          if (letter) letter.style.display = 'none';
+        }
+      });
     } else {
       iconHtml = initial;
       iconStyle = `background: ${child.color}`;
@@ -1475,4 +1524,57 @@ function bindSettingsEvents() {
     save();
     applyShortcutsVisibility();
   });
+
+  document.getElementById('exportDataBtn').addEventListener('click', exportData);
+  document.getElementById('importDataBtn').addEventListener('click', () => {
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) importData(file);
+    e.target.value = '';
+  });
+}
+
+function exportData() {
+  chrome.storage.local.get(null, (data) => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const reader = new FileReader();
+    reader.onload = () => {
+      chrome.downloads.download({
+        url: reader.result,
+        filename: 'EdgeHomepageExtension-backup-' + new Date().toISOString().slice(0, 10) + '.json',
+        saveAs: true,
+      });
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      chrome.storage.local.clear(() => {
+        chrome.storage.local.set(data, () => {
+          shortcuts = data.shortcuts || [...DEFAULT_SHORTCUTS];
+          if (data.appSettings) appSettings = { ...DEFAULT_SETTINGS, ...data.appSettings };
+          if (data.searchEngine && ENGINES[data.searchEngine]) currentEngine = data.searchEngine;
+          if (data.wallpaper) wallpaperState = data.wallpaper;
+          renderShortcuts();
+          updateClock();
+          applyWallpaper();
+          applyAllSettings();
+          applyShortcutsVisibility();
+          updateEngineUI();
+          alert('导入成功');
+        });
+      });
+    } catch (err) {
+      alert('导入失败：文件格式错误');
+    }
+  };
+  reader.readAsText(file);
 }

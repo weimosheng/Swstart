@@ -1481,6 +1481,29 @@ body.has-wallpaper::before {
   text-align: right;
 }
 
+.settings-data-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.settings-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
 /* ========== 拖拽提示 ========== */
 .drag-hint {
   position: fixed;
